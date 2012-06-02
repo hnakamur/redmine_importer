@@ -275,6 +275,7 @@ private
 
   def convert_file(file, encoding)
     nkf_option = nil
+    nkf_option = '-w' if encoding == 'AUTO'
     nkf_option = '-Sw' if encoding == 'S'
     nkf_option = '-Ew' if encoding == 'EUC'
     nkf_option ? NKF.nkf('-m0 -x ' + nkf_option, file.read) : file.read 
