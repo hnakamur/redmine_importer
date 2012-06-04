@@ -127,8 +127,11 @@ class ImporterController < ApplicationController
     # attrs_map is fields_map's invert
     attrs_map = fields_map.invert
       
+    issue_id_map = {}
     FasterCSV.foreach(tmpfile.path, {:headers=>true, :encoding=>'UTF-8', :quote_char=>wrapper, :col_sep=>splitter}) do |row|
 
+      csv_issue_id = row[attrs_map["id"]]
+      csv_issue_id = csv_issue_id ? csv_issue_id.to_i : 0
       project = Project.find_by_name(row[attrs_map["project"]])
       tracker = Tracker.find_by_name(row[attrs_map["tracker"]])
       status = IssueStatus.find_by_name(row[attrs_map["status"]])
@@ -145,7 +148,7 @@ class ImporterController < ApplicationController
       issue.author_id = author != nil && author.class.name != "AnonymousUser" ? author.id : User.current.id
       fixed_version = Version.find_by_name_and_project_id(row[attrs_map["fixed_version"]], issue.project_id)
 
-      if update_issue
+      if update_issue && csv_issue_id > 0
         # custom field
         if !ISSUE_ATTRS.include?(unique_attr.to_sym)
           issue.available_custom_fields.each do |cf|
@@ -219,7 +222,12 @@ class ImporterController < ApplicationController
       issue.subject = row[attrs_map["subject"]] || issue.subject
       
       # optional attributes
-      issue.parent_issue_id = row[attrs_map["parent_issue"]] || issue.parent_issue_id
+      parent_issue_id = row[attrs_map["parent_issue"]]
+      parent_issue_id = parent_issue_id ? parent_issue_id.to_i : nil
+      if parent_issue_id && parent_issue_id < 0
+        parent_issue_id = issue_id_map[parent_issue_id]
+      end
+      issue.parent_issue_id = parent_issue_id
       issue.description = row[attrs_map["description"]] || issue.description
       issue.category_id = category != nil ? category.id : issue.category_id
       issue.start_date = row[attrs_map["start_date"]] || issue.start_date
@@ -241,6 +249,10 @@ class ImporterController < ApplicationController
         # 记录错误
         @failed_count += 1
         @failed_issues[@handle_count + 1] = row
+      else
+        if csv_issue_id < 0
+          issue_id_map[csv_issue_id] = issue.id
+        end
       end
   
       if journal
